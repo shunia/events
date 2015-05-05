@@ -1,5 +1,6 @@
 package me.shunia.events
 {
+	import flash.events.Event;
 	import flash.utils.Dictionary;
 	
 	public class Events implements IEvents {
@@ -18,7 +19,7 @@ package me.shunia.events
 		}
 		
 		/**
-		 * 当EventInstance生命周期结束后,销毁其和原始对象间的关联.
+		 * 当EventInstance生命周期结束后,销毁该Instance和原始对象间的关联.
 		 *  
 		 * @param t
 		 */	
@@ -37,7 +38,7 @@ package me.shunia.events
 			_die = die;
 			if (_t) {
 				_listeners = new Dictionary();
-				_delegate = new DelegateDispatcher(handle);
+				_delegate = new DelegateDispatcher(_t, handle);
 			}
 			_ins = this;
 		}
@@ -104,22 +105,26 @@ package me.shunia.events
 		}
 		
 		private function getListeners(event:String):Array {
-			return _listeners.hasOwnProperty(event) ? _listeners[event] : null;
+			if (_listeners.hasOwnProperty(event)) {
+				return _listeners[event];
+			} else {
+				var arr:Array = [];
+				_listeners[event] = arr;
+				return arr;
+			}
 		}
 		
 		private function addListener(event:String, listener:Function):void {
 			var listeners:Array = getListeners(event);
-			if (!listeners) {
-				listeners = [];
-				_listeners[event] = listeners;
-			}
 			if (listeners.indexOf(listener) == -1) listeners.push(listener);
 		}
 		
 		private function removeListener(event:String, listener:Function = null):void {
 			var listeners:Array = getListeners(event);
-			if (listener == null && listeners) listeners.splice(0, listeners.length);
-			if (listener != null && listeners && listeners.indexOf(listener) != -1) listeners.splice(listeners.indexOf(listener), 1);
+			if (listener == null) 
+				listeners.splice(0, listeners.length);
+			if (listener != null && listeners.indexOf(listener) != -1) 
+				listeners.splice(listeners.indexOf(listener), 1);
 		}
 		
 		public function emit(event:String, ...args):IEvents {
@@ -127,10 +132,15 @@ package me.shunia.events
 			return _ins;
 		}
 		
+		public function emitEvent(event:Event):IEvents {
+			_delegate.fireEvent(event);
+			return _ins;
+		}
+		
 		public function off(event:String, listener:Function):IEvents {
 			removeListener(event, listener);
 			var listeners:Array = getListeners(event);
-			if (!listeners || listeners.length == 0) _delegate.remove(event);
+			if (listeners.length == 0) _delegate.remove(event);
 			return _ins;
 		}
 		
@@ -200,11 +210,15 @@ class DelegateDispatcher {
 	
 	private var _handler:Function = null;
 	private var _dispatcher:EventDispatcher = null;
+	private var _original:Boolean = false;
 	private var _events:Array = null;
 	
-	public function DelegateDispatcher(handler:Function) {
+	public function DelegateDispatcher(target:*, handler:Function) {
 		_handler = handler;
-		_dispatcher = new EventDispatcher();
+		// 如果原始对象是eventDispatcher,则用它本身来作为事件派发对象.否则使用一个新的eventDispatcher作为代理派发对象.
+		_dispatcher = (target && target is EventDispatcher) ? 
+							target as EventDispatcher : new EventDispatcher();
+		_original = _dispatcher === target;
 		_events = [];
 	}
 	
@@ -213,18 +227,27 @@ class DelegateDispatcher {
 	}
 	
 	public function add(event:String):void {
-		if (_events.indexOf(event) == -1) _events.push(event);
-		if (_events.length && !_dispatcher.hasEventListener(name)) _dispatcher.addEventListener(name, generalHandler);
+		if (_events.indexOf(event) == -1) 
+			_events.push(event);
+		if (_events.length && !_dispatcher.hasEventListener(name)) 
+			_dispatcher.addEventListener(name, generalHandler);
 	}
 	
 	public function remove(event:String):void {
-		if (_events.indexOf(event) != -1) _events.splice(_events.indexOf(event), 1);
-		if (_events.length == 0 && _dispatcher.hasEventListener(name)) _dispatcher.removeEventListener(name, generalHandler);
+		if (_events.indexOf(event) != -1) 
+			_events.splice(_events.indexOf(event), 1);
+		if (_events.length == 0) 
+			_dispatcher.removeEventListener(name, generalHandler);
 	}
 	
 	public function fire(event:String, args:Array):void {
 		if (_events.indexOf(event) != -1) 
 			_dispatcher.dispatchEvent(createEvent(event, args));
+	}
+	
+	public function fireEvent(event:Event):void {
+		if (_dispatcher && _dispatcher.hasEventListener(event.type)) 
+			_dispatcher.dispatchEvent(event);
 	}
 	
 	private function generalHandler(event:DelegateEvent):void {
