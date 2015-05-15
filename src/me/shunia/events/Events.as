@@ -69,8 +69,10 @@ package me.shunia.events
 			var handlers:Array = getListeners(event);
 			if (handlers.length > 0) {
 				var i:int = -1, h:Function, n:Function = function (index:int):Boolean { h = next(handlers, index); return h != null; };
+				var argsCp:Array = args.concat();
+				argsCp.unshift(event);
 				while (n(i)) {
-					h.apply(_t, functionArguments(h, args));
+					h.apply(_t, functionArguments(h, argsCp));
 					i ++;
 				}
 			}
