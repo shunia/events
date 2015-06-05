@@ -68,10 +68,12 @@ package me.shunia.events
 		private function handle(event:String, args:Array):void {
 			var handlers:Array = getListeners(event);
 			if (handlers.length > 0) {
-				var i:int = -1, h:Function, n:Function = function (index:int):Boolean { h = next(handlers, index); return h != null; };
-				var argsCp:Array = args.concat();
-				argsCp.unshift(event);
+				var i:int = -1, 
+					h:Function, 
+					n:Function = function (index:int):Boolean { h = next(handlers, index); return h != null; };
+				var argsCp:Array = args.concat(event);
 				while (n(i)) {
+					// 匹配参数数量以进行安全回调（防止参数数量不齐引起的报错）
 					h.apply(_t, functionArguments(h, argsCp));
 					i ++;
 				}
@@ -85,22 +87,30 @@ package me.shunia.events
 			return null;
 		}
 		
+		/**
+		 * 对方法进行参数匹配，以防止参数数量不正确导致的报错。
+		 *  
+		 * @param func
+		 * @param args
+		 * @return 与提供的方法能进行匹配的参数数组。
+		 */		
 		private function functionArguments(func:Function, args:Array):Array {
+			// 没有参数则全部返回
+			if (func.length == 0) return args;
+			
 			var fl:int = func.length, al:int = args.length, arr:Array;
-			if (fl != 0) {
-				// 复制参数数组
-				arr = args.concat();
-				
-				if (fl > al) {	// 需要的参数比提供的参数多,默认用null补齐
-					while (fl > al) {
-						arr.push(null);
-						al ++;
-					}
-				} else if (fl < al) {	// 需要的参数比提供的参数少,从参数队尾去掉多余的
-					while (fl < al) {
-						arr.pop();
-						al --;
-					}
+			// 复制参数数组
+			arr = args.concat();
+			
+			if (fl > al) {	// 需要的参数比提供的参数多,默认用null补齐
+				while (fl > al) {
+					arr.push(null);
+					al ++;
+				}
+			} else if (fl < al) {	// 需要的参数比提供的参数少,从参数队尾去掉多余的
+				while (fl < al) {
+					arr.pop();
+					al --;
 				}
 			}
 			return arr;
