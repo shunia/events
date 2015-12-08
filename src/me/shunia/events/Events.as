@@ -1,6 +1,5 @@
 package me.shunia.events
 {
-	import flash.events.Event;
 	import flash.utils.Dictionary;
 	
 	public class Events implements IEvents {
@@ -19,7 +18,7 @@ package me.shunia.events
 		}
 		
 		/**
-		 * 当EventInstance生命周期结束后,销毁该Instance和原始对象间的关联.
+		 * 当EventInstance生命周期结束后,销毁其和原始对象间的关联.
 		 *  
 		 * @param t
 		 */	
@@ -38,7 +37,7 @@ package me.shunia.events
 			_die = die;
 			if (_t) {
 				_listeners = new Dictionary();
-				_delegate = new DelegateDispatcher(_t, handle);
+				_delegate = new DelegateDispatcher(handle, _t);
 			}
 			_ins = this;
 		}
@@ -70,11 +69,12 @@ package me.shunia.events
 			if (handlers.length > 0) {
 				var i:int = -1, 
 					h:Function, 
-					n:Function = function (index:int):Boolean { h = next(handlers, index); return h != null; };
-				var argsCp:Array = args.concat(event);
+					n:Function = function (index:int):Boolean { 
+						h = next(handlers, index); 
+						return h != null; 
+					};
 				while (n(i)) {
-					// 匹配参数数量以进行安全回调（防止参数数量不齐引起的报错）
-					h.apply(_t, functionArguments(h, argsCp));
+					h.apply(_t, functionArguments(h, args));
 					i ++;
 				}
 			}
@@ -87,56 +87,44 @@ package me.shunia.events
 			return null;
 		}
 		
-		/**
-		 * 对方法进行参数匹配，以防止参数数量不正确导致的报错。
-		 *  
-		 * @param func
-		 * @param args
-		 * @return 与提供的方法能进行匹配的参数数组。
-		 */		
 		private function functionArguments(func:Function, args:Array):Array {
-			// 没有参数则全部返回
-			if (func.length == 0) return args;
-			
-			var fl:int = func.length, al:int = args.length, arr:Array;
-			// 复制参数数组
-			arr = args.concat();
-			
-			if (fl > al) {	// 需要的参数比提供的参数多,默认用null补齐
-				while (fl > al) {
-					arr.push(null);
-					al ++;
-				}
-			} else if (fl < al) {	// 需要的参数比提供的参数少,从参数队尾去掉多余的
-				while (fl < al) {
-					arr.pop();
-					al --;
+			var fl:int = func.length, al:int = args.length, arr:Array = args.concat();
+			if (fl != 0) {
+//				// 复制参数数组
+//				arr = args.concat();
+				
+				if (fl > al) {	// 需要的参数比提供的参数多,默认用null补齐
+					while (fl > al) {
+						arr.push(null);
+						al ++;
+					}
+				} else if (fl < al) {	// 需要的参数比提供的参数少,从参数队尾去掉多余的
+					while (fl < al) {
+						arr.pop();
+						al --;
+					}
 				}
 			}
 			return arr;
 		}
 		
 		private function getListeners(event:String):Array {
-			if (_listeners.hasOwnProperty(event)) {
-				return _listeners[event];
-			} else {
-				var arr:Array = [];
-				_listeners[event] = arr;
-				return arr;
-			}
+			return _listeners.hasOwnProperty(event) ? _listeners[event] : null;
 		}
 		
 		private function addListener(event:String, listener:Function):void {
 			var listeners:Array = getListeners(event);
+			if (!listeners) {
+				listeners = [];
+				_listeners[event] = listeners;
+			}
 			if (listeners.indexOf(listener) == -1) listeners.push(listener);
 		}
 		
 		private function removeListener(event:String, listener:Function = null):void {
 			var listeners:Array = getListeners(event);
-			if (listener == null) 
-				listeners.splice(0, listeners.length);
-			if (listener != null && listeners.indexOf(listener) != -1) 
-				listeners.splice(listeners.indexOf(listener), 1);
+			if (listener == null && listeners) listeners.splice(0, listeners.length);
+			if (listener != null && listeners && listeners.indexOf(listener) != -1) listeners.splice(listeners.indexOf(listener), 1);
 		}
 		
 		public function emit(event:String, ...args):IEvents {
@@ -144,15 +132,10 @@ package me.shunia.events
 			return _ins;
 		}
 		
-		public function emitEvent(event:Event):IEvents {
-			_delegate.fireEvent(event);
-			return _ins;
-		}
-		
 		public function off(event:String, listener:Function):IEvents {
 			removeListener(event, listener);
 			var listeners:Array = getListeners(event);
-			if (listeners.length == 0) _delegate.remove(event);
+			if (!listeners || listeners.length == 0) _delegate.remove(event);
 			return _ins;
 		}
 		
@@ -222,15 +205,13 @@ class DelegateDispatcher {
 	
 	private var _handler:Function = null;
 	private var _dispatcher:EventDispatcher = null;
-	private var _original:Boolean = false;
+	private var _checkOrignal:Boolean = false;
 	private var _events:Array = null;
 	
-	public function DelegateDispatcher(target:*, handler:Function) {
+	public function DelegateDispatcher(handler:Function, dispatcher:* = null) {
 		_handler = handler;
-		// 如果原始对象是eventDispatcher,则用它本身来作为事件派发对象.否则使用一个新的eventDispatcher作为代理派发对象.
-		_dispatcher = (target && target is EventDispatcher) ? 
-							target as EventDispatcher : new EventDispatcher();
-		_original = _dispatcher === target;
+		_checkOrignal = dispatcher != null && dispatcher is EventDispatcher;
+		_dispatcher = _checkOrignal ? dispatcher as EventDispatcher : new EventDispatcher();
 		_events = [];
 	}
 	
@@ -239,32 +220,39 @@ class DelegateDispatcher {
 	}
 	
 	public function add(event:String):void {
-		if (_events.indexOf(event) == -1) 
-			_events.push(event);
+		if (_events.indexOf(event) == -1) _events.push(event);
 		if (_events.length && !_dispatcher.hasEventListener(name)) 
 			_dispatcher.addEventListener(name, generalHandler);
+		if (_checkOrignal) 
+			_dispatcher.addEventListener(event, generalHandler);
 	}
 	
 	public function remove(event:String):void {
-		if (_events.indexOf(event) != -1) 
-			_events.splice(_events.indexOf(event), 1);
-		if (_events.length == 0) 
+		if (_events.indexOf(event) != -1) _events.splice(_events.indexOf(event), 1);
+		if (_events.length == 0 && _dispatcher.hasEventListener(name)) 
 			_dispatcher.removeEventListener(name, generalHandler);
+		if (_checkOrignal && _events.length == 0 && _dispatcher.hasEventListener(event)) 
+			_dispatcher.removeEventListener(event, generalHandler);
 	}
 	
 	public function fire(event:String, args:Array):void {
-		if (_events.indexOf(event) != -1) 
+		if (_checkOrignal && // 原始对象就是eventDispatcher
+			args.length == 0 && // 参数只有一个
+			args[0] is Event && // 是事件对象
+			!(args[0] is DelegateEvent) && // 不是_e包内事件类型
+			_dispatcher.hasEventListener(event)) // 有该事件的监听
+			_dispatcher.dispatchEvent(args[0]); // 原始方式派发
+		else if (_events.indexOf(event) != -1) 
 			_dispatcher.dispatchEvent(createEvent(event, args));
 	}
 	
-	public function fireEvent(event:Event):void {
-		if (_dispatcher && _dispatcher.hasEventListener(event.type)) 
-			_dispatcher.dispatchEvent(event);
-	}
-	
-	private function generalHandler(event:DelegateEvent):void {
-		if (event && _events.indexOf(event.event) != -1) {
-			_handler.apply(event, [event.event, event.args]);
+	private function generalHandler(event:Event):void {
+		if (event is DelegateEvent) {
+			if (event && _events.indexOf((event as DelegateEvent).event) != -1) 
+				_handler.apply(event, [(event as DelegateEvent).event, (event as DelegateEvent).args]);
+		} else {
+			if (event && _events.indexOf(event.type) != -1) 
+				_handler.apply(event, [event.type, [event]]);
 		}
 	}
 	
