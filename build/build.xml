@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<project name="Events" default="build.Events" basedir="../">
+    <dirname property="current.Events" file="${ant.file.Events}"/>
+    <dirname property="sources.Events" file="${current.Events}/../"/>
+
+    <echo message="[Events] Compiling: "/>
+    <echo message="[Events] Project root: ${sources.Events}"/>
+
+    <!-- setup FLEX_HOME -->
+    <import file="${current.Events}/flex-home.xml"/>
+
+    <!-- setup build environment-->
+    <property name="deploy.dir.Events" value="${sources.Events}/bin"/>
+    <property name="deploy.name.Events" value="Events.swc"/>
+
+    <!-- setup dependencies - nothing here -->
+
+    <!-- setup other properties -->
+    <property name="output.Events" value="${deploy.dir.Events}"/>
+
+    <!-- default task -->
+    <target name="build.Events" depends="clean.Events, compile.Events"/>
+
+    <!-- task clean -->
+    <target name="clean.Events">
+        <delete dir="${deploy.dir.Events}"/>
+        <mkdir dir="${deploy.dir.Events}"/>
+    </target>
+
+    <!-- task compile -->
+    <target name="compile.Events">
+        <compc output="${deploy.dir.Events}/${deploy.name.Events}" failonerror="true" maxmemory="1024m">
+            <include-sources dir="${sources.Events}/src" includes="*"/>
+        </compc>
+        <echo message="[Events] Output file: ${deploy.dir.Events}/${deploy.name.Events}"/>
+    </target>
+</project>
